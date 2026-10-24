@@ -45,7 +45,7 @@ Dentro da conversa:
   /agent ROLE TAREFA    executar planner, implementer ou auditor isoladamente
   /goal X    orquestrar planner → implementer → auditor
   /model X   selecionar rota fast, smart ou code
-  /status    status; /undo, /clear, /save, /resume, /exit
+  /menu     voltar ao menu inicial sem perder a conversa\n  /inicio   alias de /menu; 0 também abre o menu\n  /         mostrar atalhos slash\n  /status    status; /undo, /clear, /save, /resume, /exit
   :exit      sair
 
 Configuração (variáveis de ambiente):
@@ -68,7 +68,7 @@ function eventText(event: AgentEvent) {
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('--help') || argv.includes('-h')) { process.stdout.write(HELP); return; }
-  if (argv.includes('--version') || argv.includes('-v')) { process.stdout.write('Chambinho Code 0.11.0 experimental\n'); return; }
+  if (argv.includes('--version') || argv.includes('-v')) { process.stdout.write('Chambinho Code 0.12.0 experimental\n'); return; }
   let route = process.env.CHAMBINHO_ROUTE || process.env.RAIZ_ROUTE || 'code';
   const routeIndex = argv.indexOf('--route');
   if (routeIndex >= 0) {
@@ -129,7 +129,7 @@ async function main() {
     for (;;) {
       const input = (await ui!.ask('\n❯ ')).trim();
       if (!input) continue;
-      if (input === '6') return;
+      if (input === '/menu' || input === '/inicio' || input === ':menu' || input === '0') { process.stdout.write(banner(agent.route, workspace.root)); continue; }\n      if (input === '/') { process.stdout.write('Comandos: /menu, /help, /plan, /audit, /goal, /review, /fix, /test, /skills, /skill, /visual, /agents, /agent, /parallel, /model, /status, /undo, /clear, /save, /resume, /exit\\n'); continue; }\n      if (input === '6') return;
       if (input === '5') { process.stdout.write('Comandos: :route fast|smart|code, :status, :clear, :help, :exit\n'); continue; }
       const menuTasks: Record<string,string> = {
         '1': 'Converse comigo sobre este projeto. Apresente-se brevemente e pergunte como pode ajudar.',
