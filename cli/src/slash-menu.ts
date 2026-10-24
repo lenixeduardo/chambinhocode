@@ -82,7 +82,7 @@ export function openInteractivePrompt(): { ask: (question:string)=>Promise<strin
           const matches = matchingSlashItems(value);
           if (matches.length && value.startsWith('/') && !value.includes(' ')) {
             const choice = matches[selected].command;
-            finish(choice);
+            if (['/plan','/audit','/goal','/review','/fix','/test','/visual','/parallel','/agent','/skill','/model'].includes(choice)) { value=choice+' '; selected=0; draw(); }\n            else finish(choice);
           } else finish(value);
           return;
         }
