@@ -1,0 +1,20 @@
+{
+  "name": "chambinho-code-cli",
+  "version": "0.8.1",
+  "description": "Chambinho Code - agentic coding terminal for the reusable AI Gateway",
+  "type": "module",
+  "bin": { "chambinho": "dist/index.js" },
+  "files": ["dist", "README.md"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "start": "node dist/index.js",
+    "demo": "node dist/index.js --banner"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.3"
+  },
+  "license": "MIT"
+}
