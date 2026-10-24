@@ -1,4 +1,4 @@
-import readline from 'node:readline/promises';
+import {openInteractivePrompt} from './slash-menu.js';
 import process from 'node:process';
 
 const supportsColor = Boolean(process.stdout.isTTY || process.env.FORCE_COLOR === '1') && !('NO_COLOR' in process.env);
@@ -53,7 +53,4 @@ export function banner(route: string, cwd: string): string {
   return `\n${terminalMascot()}\n\n ${color(91,'C H A M B I N H O')} ${muted('C O D E')}   ${muted('v0.12.0')}\n ${muted('Agente de programação · 100% ASCII')}\n ${muted(`projeto: ${cwd}  |  rota: ${route}`)}\n\n ${accent('1.')} Conversar           ${accent('2.')} Analisar projeto\n ${accent('3.')} Editar código       ${accent('4.')} Executar comandos\n ${accent('5.')} Configurações      ${accent('6.')} Sair\n ${muted('Digite um número, uma tarefa ou /menu para voltar aqui.')}\n`;
 }
 export type AskFn = (question: string) => Promise<string>;
-export function openPrompt(): { ask: AskFn; close: () => void } {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: Boolean(process.stdin.isTTY) });
-  return { ask: (question: string) => rl.question(question), close: () => rl.close() };
-}
+export function openPrompt(): { ask: AskFn; close: () => void } {\n  return openInteractivePrompt();\n}
