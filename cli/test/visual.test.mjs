@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {resolveVisualTarget} from '../dist/visual.js';
+const root=path.resolve('/tmp/chambinho-test');
+test('local HTML resolves to file URL',()=>assert.match(resolveVisualTarget(root,'index.html'),/^file:\/\//));
+test('blocks traversal',()=>assert.throws(()=>resolveVisualTarget(root,'../secret.html'),/fora do workspace/));
+test('blocks arbitrary local file',()=>assert.throws(()=>resolveVisualTarget(root,'secret.env'),/\.html/));
+test('accepts http URLs',()=>assert.equal(resolveVisualTarget(root,'http://127.0.0.1:3000/'),'http://127.0.0.1:3000/'));
+test('blocks embedded URL credentials',()=>assert.throws(()=>resolveVisualTarget(root,'https://u:p@example.com/'),/credenciais/));
