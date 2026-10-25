@@ -109,6 +109,16 @@ async function main() {
     server = settings.gatewayUrl;
   }
   if (!hasKey(settings.clientKey)) throw new Error('Sem chave válida. Execute chambinho setup.');
+  if (interactive && ui) {
+    const diagnostic = await probe({...settings,route});
+    if (diagnostic !== 'Conexão e autenticação confirmadas.') {
+      process.stdout.write('Atenção: ' + diagnostic + '\\n');
+      if (/Chave rejeitada|Chave ausente/.test(diagnostic)) {
+        settings = await setup(ui, settings);
+        server = settings.gatewayUrl;
+      }
+    }
+  }
   const client = new GatewayClient(server, settings.clientKey);
   const approve = async (summary: string): Promise<boolean> => {
     process.stdout.write(`\n${muted('Solicitação de permissão:')}\n${summary}\n`);
