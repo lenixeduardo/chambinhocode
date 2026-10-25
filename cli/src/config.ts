@@ -5,7 +5,7 @@ import process from 'node:process';
 import {randomBytes} from 'node:crypto';
 import {GatewayClient} from './gateway.js';
 
-type Prompt = {ask(question:string):Promise<string>};
+type Prompt = {ask(question:string, options?:{secret?:boolean}):Promise<string>};
 export type CliSettings = {gatewayUrl: string; clientKey: string; route: string};
 const file = path.join(os.homedir(), '.chambinho', 'config.json');
 const defaultUrl = 'http://127.0.0.1:8000';
@@ -70,6 +70,55 @@ export async function probe(settings: CliSettings): Promise<string> {
   } finally {clearTimeout(timeout);}
 }
 
+const PROVIDERS = [
+  {name:'Mistral', env:'MISTRAL_API_KEY'},
+  {name:'Gemini', env:'GEMINI_API_KEY'},
+  {name:'Groq', env:'GROQ_API_KEY'},
+  {name:'NVIDIA', env:'NVIDIA_API_KEY'}
+] as const;
+const providerFile = path.join(os.homedir(), '.chambinho', 'providers.json');
+
+export function parseProviderSelection(input:string): number[] {
+  const selected = input.trim().toLowerCase();
+  if (!selected || selected === '0') return [];
+  if (selected === 'a' || selected === 'todos') return [0,1,2,3];
+  const numbers = selected.split(/[ ,]+/).map(Number);
+  if (!numbers.length || numbers.some(n=>!Number.isInteger(n)||n<1||n>4)) throw new Error('Escolha 1-4, separados por vírgula, a ou 0.');
+  return [...new Set(numbers.map(n=>n-1))].sort();
+}
+
+export async function configureProviders(ui:Prompt):Promise<void> {
+  process.stdout.write('\nSelecione os provedores (marque vários: 1,2,3,4):\n');
+  for (let i=0;i<PROVIDERS.length;i++) process.stdout.write('  [ ] '+(i+1)+'. '+PROVIDERS[i].name+'\n');
+  process.stdout.write('  [a] Todos  [0] Pular\n');
+  const indices=parseProviderSelection(await ui.ask('Seleção: '));
+  if (!indices.length) return;
+  let existing:Record<string,string>={};
+  try {
+    const content=JSON.parse(await fs.readFile(providerFile,'utf8')) as Record<string,string>;
+    if (!content || typeof content !== 'object' || Array.isArray(content)) throw new Error('Formato inválido');
+    existing=content;
+  } catch(error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('Não foi possível ler o arquivo local de provedores.');
+  }
+  const next={...existing};
+  for (const index of indices) {
+    const provider=PROVIDERS[index];
+    const previous=Boolean(existing[provider.env]);
+    const entered=(await ui.ask('API key '+provider.name+(previous?' (Enter mantém a atual)':'')+': ',{secret:true})).trim();
+    if (!entered && !previous) throw new Error('Chave de '+provider.name+' não informada; nenhuma alteração salva.');
+    if (entered) next[provider.env]=entered;
+  }
+  await fs.mkdir(path.dirname(providerFile),{recursive:true,mode:0o700});
+  const temporary=providerFile+'.tmp-'+process.pid;
+  try {
+    await fs.writeFile(temporary,JSON.stringify(next,null,2)+'\n',{mode:0o600,flag:'wx'});
+    await fs.rename(temporary,providerFile);
+    if(process.platform!=='win32') await fs.chmod(providerFile,0o600);
+  } finally {await fs.rm(temporary,{force:true}).catch(()=>{});}
+  process.stdout.write('Provedores salvos no perfil local. As credenciais não foram exibidas.\n');
+}
+
 export async function setup(ui: Prompt, initial: CliSettings): Promise<CliSettings> {
   process.stdout.write('\nCHAMBINHO — Configuração de acesso\n');
   const address = (await ui.ask('URL do gateway [' + initial.gatewayUrl + ']: ')).trim() || initial.gatewayUrl;
@@ -79,6 +128,7 @@ export async function setup(ui: Prompt, initial: CliSettings): Promise<CliSettin
   const next = {gatewayUrl:address,clientKey:key,route};
   if (!hasKey(key)) throw new Error('A chave precisa ter pelo menos 24 caracteres e não pode ser o placeholder.');
   await saveSettings(next);
+  if (localGateway(address)) await configureProviders(ui);
   process.stdout.write('Configuração gravada em ' + file + '.\n');
   process.stdout.write((await probe(next)) + '\n');
   return next;
