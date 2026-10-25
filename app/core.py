@@ -124,6 +124,16 @@ async def require_quota(tenant: Tenant = Depends(resolve_tenant)) -> Tenant:
 def provider_credentials(provider: str) -> tuple[str, str] | None:
     token = os.getenv(KEY_ENV[provider], '')
     if not token:
+        try:
+            config_file = Path.home() / '.chambinho' / 'providers.json'
+            if not config_file.is_symlink():
+                saved = json.loads(config_file.read_text(encoding='utf-8'))
+                candidate = saved.get(KEY_ENV[provider], '') if isinstance(saved, dict) else ''
+                if isinstance(candidate, str):
+                    token = candidate
+        except (OSError, ValueError, TypeError):
+            pass
+    if not token:
         return None
     url = BASE_URLS[provider]
     if provider == 'cloudflare':
