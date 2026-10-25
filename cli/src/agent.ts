@@ -74,6 +74,10 @@ export class Agent {
           this.emit({kind:'error',text:message + ' Use /setup ou a opção 5 para atualizar a chave.'});
           return 'Autenticação inválida; nenhuma alteração foi executada.';
         }
+        if (/No AI provider available|No AI provider|HTTP 503|Upstream rejected request/.test(message)) {
+          this.emit({kind:'error',text:'Nenhum modelo respondeu na rota selecionada. Verifique as API keys e o acesso aos modelos configurados no gateway. Detalhe: '+message});
+          return 'O gateway está acessível, mas o provedor de IA não respondeu. Nenhuma alteração foi executada.';
+        }
         failures++;
         this.emit({kind:'error',text:`Falha do modelo (${failures}/3): ${message}`});
         if (failures >= 3) return 'Falha persistente de comunicação. Nenhuma nova alteração foi executada.';

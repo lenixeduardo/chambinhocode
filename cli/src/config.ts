@@ -64,7 +64,10 @@ export async function probe(settings: CliSettings): Promise<string> {
     });
     if (response.status === 401 || response.status === 403) return 'Chave rejeitada pelo gateway (HTTP ' + response.status + '). Execute chambinho setup.';
     if (!response.ok) return 'Gateway respondeu HTTP ' + response.status + '.';
-    return 'Conexão e autenticação confirmadas.';
+    const data=await response.json() as {routes?:Record<string,Array<{provider?:string;configured?:boolean}>>};
+    const available=data.routes?.[settings.route]?.filter(item=>item.configured).map(item=>item.provider).filter(Boolean) || [];
+    if (!available.length) return 'Autenticado, mas nenhum provedor configurado na rota '+settings.route+'. Use chambinho setup.';
+    return 'Conexão e autenticação confirmadas. Provedores disponíveis na rota '+settings.route+': '+available.join(', ')+'.';
   } catch (error) {
     return 'Não foi possível alcançar o gateway: ' + (error as Error).message;
   } finally {clearTimeout(timeout);}
