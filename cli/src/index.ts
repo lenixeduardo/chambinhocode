@@ -6,6 +6,7 @@ import os from 'node:os';
 import {createHash} from 'node:crypto';
 import { banner, muted, openPrompt } from './terminal.js';
 import { GatewayClient } from './gateway.js';
+import {readSettings, setup, probe, hasKey} from './config.js';
 import { Workspace } from './workspace.js';
 import { Agent, AgentEvent } from './agent.js';
 import { listSkills, loadSkill, installSkill } from './skills.js';
@@ -21,6 +22,7 @@ Uso:
   chambinho -p "explique src/"     prompt único
   chambinho --route smart          selecionar rota fast, smart ou code
   chambinho doctor                 diagnosticar configuração
+  chambinho setup                  configurar endereço e chave
   chambinho --banner               mostrar logotipo no terminal
 
 Dentro da conversa:
@@ -48,7 +50,7 @@ Dentro da conversa:
   /menu     voltar ao menu inicial sem perder a conversa\n  /inicio   alias de /menu; 0 também abre o menu\n  /         mostrar atalhos slash\n  /status    status; /undo, /clear, /save, /resume, /exit
   :exit      sair
 
-Configuração (variáveis de ambiente):
+Configuração: execute chambinho setup (ou opção 5). Variáveis de ambiente opcionais:
   CHAMBINHO_GATEWAY_URL   ex.: http://127.0.0.1:8000
   CHAMBINHO_CLIENT_KEY    token secreto configurado em API_CLIENTS_JSON
   CHAMBINHO_ROUTE         rota padrão: code
@@ -68,8 +70,9 @@ function eventText(event: AgentEvent) {
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('--help') || argv.includes('-h')) { process.stdout.write(HELP); return; }
-  if (argv.includes('--version') || argv.includes('-v')) { process.stdout.write('Chambinho Code 0.12.0 experimental\n'); return; }
-  let route = process.env.CHAMBINHO_ROUTE || process.env.RAIZ_ROUTE || 'code';
+  if (argv.includes('--version') || argv.includes('-v')) { process.stdout.write('Chambinho Code 0.13.0 experimental\n'); return; }
+  let settings = await readSettings();
+  let route = settings.route;
   const routeIndex = argv.indexOf('--route');
   if (routeIndex >= 0) {
     route = argv[routeIndex + 1] || '';
@@ -77,29 +80,18 @@ async function main() {
   }
   if (!['code','fast','smart'].includes(route)) throw new Error('Rota inválida; use fast, smart ou code.');
   if (argv.includes('--banner')) { process.stdout.write(banner(route, process.cwd())); return; }
-  const server = process.env.CHAMBINHO_GATEWAY_URL || process.env.RAIZ_GATEWAY_URL || 'http://127.0.0.1:8000';
+  let server = settings.gatewayUrl;
+  if (argv[0] === 'setup') {
+    if (!process.stdin.isTTY) throw new Error('Setup requer terminal interativo.');
+    const setupUi = openPrompt();
+    try { await setup(setupUi, settings); } finally {setupUi.close();}
+    return;
+  }
   if (argv[0] === 'doctor') {
     process.stdout.write(banner(route, process.cwd()));
-    process.stdout.write(`Node ${process.version}\nGateway: ${server}\n`);
-    process.stdout.write(`CHAMBINHO_CLIENT_KEY: ${(process.env.CHAMBINHO_CLIENT_KEY || process.env.RAIZ_CLIENT_KEY) && ((process.env.CHAMBINHO_CLIENT_KEY || process.env.RAIZ_CLIENT_KEY) || '').length >= 24 ? 'configurada' : 'ausente ou inválida'}\n`);
-    try {
-      const client = new GatewayClient(server, (process.env.CHAMBINHO_CLIENT_KEY || process.env.RAIZ_CLIENT_KEY) || '');
-      const controller = new AbortController(); const timeout = setTimeout(()=>controller.abort(),3500);
-      try {
-        const resp = await fetch(`${client.url}/health`, {signal:controller.signal});
-        process.stdout.write(`Health: HTTP ${resp.status}\n`);
-        if (resp.ok && (process.env.CHAMBINHO_CLIENT_KEY || process.env.RAIZ_CLIENT_KEY)) {
-          const routes = await fetch(`${client.url}/v1/routes`, {signal:controller.signal,headers:{Authorization:`Bearer ${(process.env.CHAMBINHO_CLIENT_KEY || process.env.RAIZ_CLIENT_KEY)}`}});
-          process.stdout.write(`Autenticação: HTTP ${routes.status}\n`);
-          if (routes.ok) {
-            const body = await routes.json() as {routes?:Record<string,Array<{provider:string;configured:boolean}>>};
-            const configured = body.routes?.[route]?.filter(t => t.configured).map(t => t.provider) || [];
-            process.stdout.write(`Provedores configurados na rota ${route}: ${configured.join(', ') || 'nenhum'}\n`);
-          }
-        }
-      }
-      finally { clearTimeout(timeout); }
-    } catch(error) { process.stdout.write(`Health: indisponível (${(error as Error).message})\n`); }
+    process.stdout.write('Node ' + process.version + '\nGateway: ' + server + '\n');
+    process.stdout.write('Chave: ' + (hasKey(settings.clientKey) ? 'presente' : 'ausente ou inválida') + '\n');
+    process.stdout.write((await probe({...settings,route})) + '\n');
     return;
   }
   let prompt = '';
@@ -111,8 +103,13 @@ async function main() {
     throw new Error('Modo interativo requer terminal (TTY); use chambinho -p "sua tarefa".');
   }
   const workspace = await Workspace.from(process.cwd());
-  const client = new GatewayClient(server, (process.env.CHAMBINHO_CLIENT_KEY || process.env.RAIZ_CLIENT_KEY) || '');
   const ui = interactive ? openPrompt() : null;
+  if (interactive && ui && !hasKey(settings.clientKey)) {
+    settings = await setup(ui, settings);
+    server = settings.gatewayUrl;
+  }
+  if (!hasKey(settings.clientKey)) throw new Error('Sem chave válida. Execute chambinho setup.');
+  const client = new GatewayClient(server, settings.clientKey);
   const approve = async (summary: string): Promise<boolean> => {
     process.stdout.write(`\n${muted('Solicitação de permissão:')}\n${summary}\n`);
     if (!ui) { process.stdout.write('  Recusado: modo não interativo.\n'); return false; }
@@ -129,8 +126,14 @@ async function main() {
     for (;;) {
       const input = (await ui!.ask('\n❯ ')).trim();
       if (!input) continue;
-      if (input === '/menu' || input === '/inicio' || input === ':menu' || input === '0') { process.stdout.write(banner(agent.route, workspace.root)); continue; }\n      if (input === '/') { process.stdout.write('Comandos: /menu, /help, /plan, /audit, /goal, /review, /fix, /test, /skills, /skill, /visual, /agents, /agent, /parallel, /model, /status, /undo, /clear, /save, /resume, /exit\\n'); continue; }\n      if (input === '6') return;
-      if (input === '5') { process.stdout.write('Comandos: :route fast|smart|code, :status, :clear, :help, :exit\n'); continue; }
+      if (input === '/menu' || input === '/inicio' || input === ':menu' || input === '0') { process.stdout.write(banner(agent.route, workspace.root)); continue; }
+      if (input === '/') { process.stdout.write('Comandos: /menu, /help, /plan, /audit, /goal, /review, /fix, /test, /skills, /skill, /visual, /agents, /agent, /parallel, /model, /status, /undo, /clear, /save, /resume, /exit\\n'); continue; }
+      if (input === '6') return;
+      if (input === '5' || input === '/setup' || input === ':setup') {
+        try { settings = await setup(ui!, settings); server = settings.gatewayUrl; (agent as unknown as {client: GatewayClient}).client = new GatewayClient(server,settings.clientKey); }
+        catch (error) { process.stderr.write((error as Error).message + '\n'); }
+        continue;
+      }
       const menuTasks: Record<string,string> = {
         '1': 'Converse comigo sobre este projeto. Apresente-se brevemente e pergunte como pode ajudar.',
         '2': 'Analise a estrutura e os arquivos principais deste projeto, destacando problemas e melhorias.',

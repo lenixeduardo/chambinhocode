@@ -50,7 +50,7 @@ export function terminalMascot(): string {
 }
 
 export function banner(route: string, cwd: string): string {
-  return `\n${terminalMascot()}\n\n ${color(91,'C H A M B I N H O')} ${muted('C O D E')}   ${muted('v0.12.0')}\n ${muted('Agente de programação · 100% ASCII')}\n ${muted(`projeto: ${cwd}  |  rota: ${route}`)}\n\n ${accent('1.')} Conversar           ${accent('2.')} Analisar projeto\n ${accent('3.')} Editar código       ${accent('4.')} Executar comandos\n ${accent('5.')} Configurações      ${accent('6.')} Sair\n ${muted('Digite um número, uma tarefa ou /menu para voltar aqui.')}\n`;
+  return `\n${terminalMascot()}\n\n ${color(91,'C H A M B I N H O')} ${muted('C O D E')}   ${muted('v0.13.0')}\n ${muted('Agente de programação · 100% ASCII')}\n ${muted(`projeto: ${cwd}  |  rota: ${route}`)}\n\n ${accent('1.')} Conversar           ${accent('2.')} Analisar projeto\n ${accent('3.')} Editar código       ${accent('4.')} Executar comandos\n ${accent('5.')} Configurações      ${accent('6.')} Sair\n ${muted('Digite um número, uma tarefa ou /menu para voltar aqui.')}\n`;
 }
 export type AskFn = (question: string) => Promise<string>;
 export function openPrompt(): { ask: AskFn; close: () => void } {

@@ -69,8 +69,13 @@ export class Agent {
         result = this.client.chatStream ? await this.client.chatStream(this.route, messages, delta => this.emit({kind:'delta',text:delta})) : await this.client.chat(this.route, messages);
         failures = 0;
       } catch (error) {
+        const message = (error as Error).message;
+        if (/CHAMBINHO_CLIENT_KEY|HTTP 401|HTTP 403|Streaming HTTP 401|Streaming HTTP 403/.test(message)) {
+          this.emit({kind:'error',text:message + ' Use /setup ou a opção 5 para atualizar a chave.'});
+          return 'Autenticação inválida; nenhuma alteração foi executada.';
+        }
         failures++;
-        this.emit({kind:'error',text:`Falha do modelo (${failures}/3): ${(error as Error).message}`});
+        this.emit({kind:'error',text:`Falha do modelo (${failures}/3): ${message}`});
         if (failures >= 3) return 'Falha persistente de comunicação. Nenhuma nova alteração foi executada.';
         await new Promise(resolve => setTimeout(resolve, 250 * failures));
         continue;
