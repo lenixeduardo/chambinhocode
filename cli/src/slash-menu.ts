@@ -49,21 +49,16 @@ export function openInteractivePrompt(): { ask: (question:string, options?:{secr
     return new Promise((resolve,reject)=>{
       let value = '';
       let selected = 0;
-      let renderedLines = 0;
-      let cursor = 0;
+      // Git Bash/mintty: never use ESC[0J or reposition above the prompt.
+      // Those sequences can erase conversation history after a wrapped line.
       const draw = () => {
-        const matches = options?.secret ? [] : matchingSlashItems(value);
-        selected = Math.min(selected, Math.max(0,matches.length-1));
-        const lines = matches.length ? matches.map((item,i) =>
-          (i===selected ? '\x1b[7m' : '') + '  ' + (i===selected?'❯':' ') + ' ' +
-          item.command.padEnd(13) + item.description + (i===selected?'\x1b[0m':'')
-        ) : [];
-        // Retorna ao começo da área desenhada antes de reimprimir.
-        if (renderedLines) process.stdout.write('\r' + '\x1b['+renderedLines+'A');
-        process.stdout.write('\r\x1b[0J' + question + (options?.secret ? '*'.repeat(value.length) : value) + '\x1b[K');
-        for (const line of lines) process.stdout.write('\n\r' + line + '\x1b[K');
-        renderedLines = lines.length;
-        if (renderedLines) process.stdout.write('\x1b['+renderedLines+'A\r\x1b['+(question.length+value.length)+'C');
+        const masked = options?.secret ? '*'.repeat(value.length) : value;
+        const columns = Math.max(20, process.stdout.columns || 80);
+        const width = Math.max(1, columns - [...question].length - 2);
+        const visible = [...masked].slice(-width).join('');
+        readline.cursorTo(process.stdout, 0);
+        readline.clearLine(process.stdout, 0);
+        process.stdout.write(question + visible);
       };
       const cleanup = () => {
         process.stdin.off('keypress',onKey);
@@ -71,9 +66,9 @@ export function openInteractivePrompt(): { ask: (question:string, options?:{secr
       };
       const finish = (answer:string) => {
         cleanup();
-        // Limpa o menu antes de confirmar a linha digitada.
-        if (renderedLines) process.stdout.write('\r\x1b[0J');
-        process.stdout.write('\r\x1b[2K'+question+(options?.secret ? '[oculta]' : answer)+'\n');
+        readline.cursorTo(process.stdout, 0);
+        readline.clearLine(process.stdout, 0);
+        process.stdout.write(question + (options?.secret ? '[oculta]' : answer) + '\n');
         resolve(answer);
       };
       const onKey = (str:string | undefined,key:{name?:string;ctrl?:boolean;meta?:boolean;sequence?:string}) => {
