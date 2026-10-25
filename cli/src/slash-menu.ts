@@ -33,10 +33,10 @@ export function matchingSlashItems(input: string): SlashItem[] {
 }
 
 /** Editor de uma linha com autocomplete de comandos para terminais ANSI (Git Bash incluso). */
-export function openInteractivePrompt(): { ask: (question:string)=>Promise<string>; close:()=>void } {
+export function openInteractivePrompt(): { ask: (question:string, options?:{secret?:boolean})=>Promise<string>; close:()=>void } {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     const rl = readline.createInterface({input:process.stdin,output:process.stdout});
-    return {ask:(question)=>new Promise(resolve=>rl.question(question,resolve)),close:()=>rl.close()};
+    return {ask:(question, options)=>options?.secret ? Promise.reject(new Error('Entrada secreta requer terminal TTY.')) : new Promise(resolve=>rl.question(question,resolve)),close:()=>rl.close()};
   }
   readline.emitKeypressEvents(process.stdin);
   const originalRaw = process.stdin.isRaw || false;
@@ -44,7 +44,7 @@ export function openInteractivePrompt(): { ask: (question:string)=>Promise<strin
   process.stdin.resume();
   let activeCleanup: (()=>void) | undefined;
   let closed = false;
-  const ask = (question:string):Promise<string> => {
+  const ask = (question:string, options?:{secret?:boolean}):Promise<string> => {
     if (closed) return Promise.reject(new Error('Terminal fechado.'));
     return new Promise((resolve,reject)=>{
       let value = '';
@@ -52,7 +52,7 @@ export function openInteractivePrompt(): { ask: (question:string)=>Promise<strin
       let renderedLines = 0;
       let cursor = 0;
       const draw = () => {
-        const matches = matchingSlashItems(value);
+        const matches = options?.secret ? [] : matchingSlashItems(value);
         selected = Math.min(selected, Math.max(0,matches.length-1));
         const lines = matches.length ? matches.map((item,i) =>
           (i===selected ? '\x1b[7m' : '') + '  ' + (i===selected?'❯':' ') + ' ' +
@@ -60,7 +60,7 @@ export function openInteractivePrompt(): { ask: (question:string)=>Promise<strin
         ) : [];
         // Retorna ao começo da área desenhada antes de reimprimir.
         if (renderedLines) process.stdout.write('\r' + '\x1b['+renderedLines+'A');
-        process.stdout.write('\r\x1b[0J' + question + value + '\x1b[K');
+        process.stdout.write('\r\x1b[0J' + question + (options?.secret ? '*'.repeat(value.length) : value) + '\x1b[K');
         for (const line of lines) process.stdout.write('\n\r' + line + '\x1b[K');
         renderedLines = lines.length;
         if (renderedLines) process.stdout.write('\x1b['+renderedLines+'A\r\x1b['+(question.length+value.length)+'C');
@@ -73,13 +73,13 @@ export function openInteractivePrompt(): { ask: (question:string)=>Promise<strin
         cleanup();
         // Limpa o menu antes de confirmar a linha digitada.
         if (renderedLines) process.stdout.write('\r\x1b[0J');
-        process.stdout.write('\r\x1b[2K'+question+answer+'\n');
+        process.stdout.write('\r\x1b[2K'+question+(options?.secret ? '[oculta]' : answer)+'\n');
         resolve(answer);
       };
       const onKey = (str:string | undefined,key:{name?:string;ctrl?:boolean;meta?:boolean;sequence?:string}) => {
         if (key.ctrl && key.name==='c') { cleanup(); process.stdout.write('^C\n'); reject(new Error('Interrompido (Ctrl+C).')); return; }
         if (key.name==='return' || key.name==='enter') {
-          const matches = matchingSlashItems(value);
+          const matches = options?.secret ? [] : matchingSlashItems(value);
           if (matches.length && value.startsWith('/') && !value.includes(' ')) {
             const choice = matches[selected].command;
             if (['/plan','/audit','/goal','/review','/fix','/test','/visual','/parallel','/agent','/skill','/model'].includes(choice)) { value=choice+' '; selected=0; draw(); }
@@ -89,7 +89,7 @@ export function openInteractivePrompt(): { ask: (question:string)=>Promise<strin
         }
         if (key.name==='escape') { if(value.startsWith('/')) {value='';selected=0;draw();} return; }
         if (key.name==='up' || key.name==='down') {
-          const matches=matchingSlashItems(value);
+          const matches=options?.secret ? [] : matchingSlashItems(value);
           if(matches.length) selected=(selected+(key.name==='down'?1:-1)+matches.length)%matches.length;
           draw();return;
         }
