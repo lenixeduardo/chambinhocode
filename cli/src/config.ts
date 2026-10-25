@@ -75,7 +75,9 @@ export async function setup(ui: Prompt, initial: CliSettings): Promise<CliSettin
   const address = (await ui.ask('URL do gateway [' + initial.gatewayUrl + ']: ')).trim() || initial.gatewayUrl;
   const key = localGateway(address) ? await ensureLocalKey() : (await ui.ask('Chave do gateway remoto: ')).trim() || initial.clientKey;
   if (localGateway(address)) process.stdout.write('Chave local de 24 caracteres gerada/recuperada automaticamente.\n');
-  const route = (await ui.ask('Rota [code/fast/smart] [' + initial.route + ']: ')).trim() || initial.route;
+  // A instalação é para programação. Rotas avançadas podem ser alteradas depois com /model.
+  const route = ['code','fast','smart'].includes(initial.route) ? initial.route : 'code';
+  process.stdout.write('Modo de IA: programação (code). Para alterar depois, use /model fast|smart|code.\n');
   const next = {gatewayUrl:address,clientKey:key,route};
   if (!hasKey(key)) throw new Error('A chave precisa ter pelo menos 24 caracteres e não pode ser o placeholder.');
   await saveSettings(next);
