@@ -58,11 +58,11 @@ export async function probe(settings: CliSettings): Promise<string> {
 
 export async function setup(ui: Prompt, initial: CliSettings): Promise<CliSettings> {
   process.stdout.write('\nCHAMBINHO — Configuração de acesso\n');
-  const address = (await ui.question('URL do gateway [' + initial.gatewayUrl + ']: ')).trim() || initial.gatewayUrl;
+  const address = (await ui.ask('URL do gateway [' + initial.gatewayUrl + ']: ')).trim() || initial.gatewayUrl;
   process.stdout.write('A chave será exibida enquanto você digita; evite compartilhar a tela.\n');
-  const entered = (await ui.question('Chave do cliente (Enter mantém a atual): ')).trim();
+  const entered = (await ui.ask('Chave do cliente (Enter mantém a atual): ')).trim();
   const key = entered || initial.clientKey;
-  const route = (await ui.question('Rota [code/fast/smart] [' + initial.route + ']: ')).trim() || initial.route;
+  const route = (await ui.ask('Rota [code/fast/smart] [' + initial.route + ']: ')).trim() || initial.route;
   const next = {gatewayUrl:address,clientKey:key,route};
   if (!hasKey(key)) throw new Error('A chave precisa ter pelo menos 24 caracteres e não pode ser o placeholder.');
   await saveSettings(next);
