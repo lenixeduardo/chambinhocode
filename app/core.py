@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+from pathlib import Path
 import secrets
 import time
 import uuid
@@ -79,10 +80,29 @@ def load_clients() -> dict[str, dict]:
         logger.error('Invalid API_CLIENTS_JSON configuration: %s', exc)
         raise RuntimeError('Invalid API_CLIENTS_JSON configuration') from exc
 
-def resolve_tenant(authorization: str | None = Header(default=None)) -> Tenant:
+def load_local_client() -> dict | None:
+    """Accept the per-user localhost key without registering it in API_CLIENTS_JSON."""
+    # Gateway MUST be bound to loopback by the process launcher. Requests are also
+    # restricted below, so a mistakenly public bind cannot expose this credential.
+    credential_path = Path.home() / '.chambinho' / 'local-client.json'
+    try:
+        if credential_path.is_symlink():
+            return None
+        record = json.loads(credential_path.read_text(encoding='utf-8'))
+        key = record.get('key', '')
+        if isinstance(key, str) and len(key) == 24:
+            return record
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass
+    return None
+
+def resolve_tenant(request: Request, authorization: str | None = Header(default=None)) -> Tenant:
     if not authorization or not authorization.startswith('Bearer '):
         raise HTTPException(401, 'Missing bearer token')
     supplied = authorization[7:]
+    local = load_local_client()
+    if (request.client and request.client.host in {'127.0.0.1', '::1'} and local and secrets.compare_digest(supplied, local['key'])):
+        return Tenant('chambinho-local', 20, {'code', 'smart', 'fast'})
     clients = load_clients()
     for name, settings in clients.items():
         key = settings.get('key', '')
