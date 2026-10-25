@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import process from 'node:process';
-import type {Interface} from 'node:readline/promises';
 import {GatewayClient} from './gateway.js';
 
+type Prompt = {ask(question:string):Promise<string>};
 export type CliSettings = {gatewayUrl: string; clientKey: string; route: string};
 const file = path.join(os.homedir(), '.chambinho', 'config.json');
 const defaultUrl = 'http://127.0.0.1:8000';
@@ -19,7 +19,7 @@ export async function readSettings(): Promise<CliSettings> {
   }
   return {
     gatewayUrl: process.env.CHAMBINHO_GATEWAY_URL || process.env.RAIZ_GATEWAY_URL || disk.gatewayUrl || defaultUrl,
-    clientKey: process.env.CHAMBINHO_CLIENT_KEY || process.env.RAIZ_CLIENT_KEY || disk.clientKey || '',
+    clientKey: (hasKey(process.env.CHAMBINHO_CLIENT_KEY || '') ? process.env.CHAMBINHO_CLIENT_KEY : '') || (hasKey(process.env.RAIZ_CLIENT_KEY || '') ? process.env.RAIZ_CLIENT_KEY : '') || disk.clientKey || '',
     route: process.env.CHAMBINHO_ROUTE || process.env.RAIZ_ROUTE || disk.route || 'code'
   };
 }
@@ -56,19 +56,12 @@ export async function probe(settings: CliSettings): Promise<string> {
   } finally {clearTimeout(timeout);}
 }
 
-export async function setup(ui: Interface, initial: CliSettings): Promise<CliSettings> {
+export async function setup(ui: Prompt, initial: CliSettings): Promise<CliSettings> {
   process.stdout.write('\nCHAMBINHO — Configuração de acesso\n');
   const address = (await ui.question('URL do gateway [' + initial.gatewayUrl + ']: ')).trim() || initial.gatewayUrl;
-  // Suppress echo through a separate TTY when supported; otherwise warn rather than silently echoing.
-  let key: string;
-  if (process.stdin.isTTY && process.stdout.isTTY && process.platform !== 'win32') {
-    const mutable = ui as Interface & {write?: (text:string)=>void};
-    // readline does not provide a portable no-echo input; use normal entry with warning.
-    void mutable;
-  }
   process.stdout.write('A chave será exibida enquanto você digita; evite compartilhar a tela.\n');
   const entered = (await ui.question('Chave do cliente (Enter mantém a atual): ')).trim();
-  key = entered || initial.clientKey;
+  const key = entered || initial.clientKey;
   const route = (await ui.question('Rota [code/fast/smart] [' + initial.route + ']: ')).trim() || initial.route;
   const next = {gatewayUrl:address,clientKey:key,route};
   if (!hasKey(key)) throw new Error('A chave precisa ter pelo menos 24 caracteres e não pode ser o placeholder.');
