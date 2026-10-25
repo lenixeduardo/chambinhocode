@@ -53,7 +53,18 @@ export class Workspace {
   }
   checkpointCount(): number { return this.checkpoints.length; }
   static async from(root: string): Promise<Workspace> {
-    const canonical = await fs.realpath(root);
+    // Running a globally linked CLI from its own /cli folder should operate
+    // on the repository project, not on the nested package by accident.
+    let canonical = await fs.realpath(root);
+    if (path.basename(canonical).toLowerCase() === 'cli') {
+      const parent = path.dirname(canonical);
+      try {
+        const marker = await fs.stat(path.join(parent, '.git'));
+        if (marker.isDirectory() || marker.isFile()) canonical = parent;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
     const stateDir = process.env.CHAMBINHO_STATE_DIR || path.join(os.homedir(), '.chambinho', 'checkpoints');
     const file = path.join(stateDir, createHash('sha256').update(canonical).digest('hex') + '.json');
     const ws = new Workspace(canonical, file);
@@ -157,7 +168,7 @@ export class Workspace {
         if (scanned >= MAX_SEARCH_FILES || results.length >= 35) break;
       }
     }
-    return results.length ? results.join('\n') : 'Nenhuma ocorrência encontrada.';
+    return results.length ? results.join('\n') : 'Nenhuma ocorrência no conteúdo. Para localizar pelo nome, use list_files.';
   }
 
   private async spawn(program: string, args: string[], timeout = 25_000): Promise<string> {
@@ -210,8 +221,10 @@ export class Workspace {
         await this.resolveFile(filename, { allowNew:true });
         const handle = await fs.open(full, 'wx', 0o600);
         try { await handle.writeFile(content, 'utf8'); } finally { await handle.close(); }
+        const confirmed = await fs.readFile(full, 'utf8');
+        if (confirmed !== content) throw new Error('Arquivo criado, mas a verificação do conteúdo falhou.');
         await this.remember({file: filename, previous: null, expected: content});
-        return `Criado: ${filename}`;
+        return `Criado e verificado: ${full} (${Buffer.byteLength(content)} bytes).`;
       }
       case 'run_command': {
         const program = argString(args,'program'); const argv = args.argv;
