@@ -66,9 +66,9 @@ export function openInteractivePrompt(): { ask: (question:string, options?:{secr
       };
       const finish = (answer:string) => {
         cleanup();
-        // Limpa o menu antes de confirmar a linha digitada.
-        if (renderedLines) process.stdout.write('\r\x1b[0J');
-        process.stdout.write('\r\x1b[2K'+question+(options?.secret ? '[oculta]' : answer)+'\n');
+        readline.cursorTo(process.stdout, 0);
+        readline.clearLine(process.stdout, 0);
+        process.stdout.write(question + (options?.secret ? '[oculta]' : answer) + '\n');
         resolve(answer);
       };
       const onKey = (str:string | undefined,key:{name?:string;ctrl?:boolean;meta?:boolean;sequence?:string}) => {
