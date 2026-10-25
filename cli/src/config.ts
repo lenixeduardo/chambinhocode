@@ -2,12 +2,26 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import process from 'node:process';
+import {randomBytes} from 'node:crypto';
 import {GatewayClient} from './gateway.js';
 
 type Prompt = {ask(question:string):Promise<string>};
 export type CliSettings = {gatewayUrl: string; clientKey: string; route: string};
 const file = path.join(os.homedir(), '.chambinho', 'config.json');
 const defaultUrl = 'http://127.0.0.1:8000';
+const localKeyFile = path.join(os.homedir(), '.chambinho', 'local-client.json');
+const localGateway = (url:string) => { try {const parsed=new URL(url); return parsed.protocol==='http:' && ['127.0.0.1','localhost','[::1]'].includes(parsed.hostname);} catch {return false;} };
+
+export async function ensureLocalKey(): Promise<string> {
+  try { const data=JSON.parse(await fs.readFile(localKeyFile,'utf8')) as {key?:string}; if (hasKey(data.key || '')) return data.key!; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('Arquivo de credencial local inválido; verifique ~/.chambinho/local-client.json.'); }
+  await fs.mkdir(path.dirname(localKeyFile),{recursive:true,mode:0o700});
+  const key=randomBytes(18).toString('base64url'); // Exactly 24 random characters (144 bits).
+  try { await fs.writeFile(localKeyFile,JSON.stringify({key})+'\n',{flag:'wx',mode:0o600}); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code==='EEXIST') return ensureLocalKey(); throw error; }
+  if (process.platform !== 'win32') await fs.chmod(localKeyFile,0o600);
+  return key;
+}
 
 export async function readSettings(): Promise<CliSettings> {
   let disk: Partial<CliSettings> = {};
@@ -19,7 +33,7 @@ export async function readSettings(): Promise<CliSettings> {
   }
   return {
     gatewayUrl: process.env.CHAMBINHO_GATEWAY_URL || process.env.RAIZ_GATEWAY_URL || disk.gatewayUrl || defaultUrl,
-    clientKey: (hasKey(process.env.CHAMBINHO_CLIENT_KEY || '') ? process.env.CHAMBINHO_CLIENT_KEY : '') || (hasKey(process.env.RAIZ_CLIENT_KEY || '') ? process.env.RAIZ_CLIENT_KEY : '') || disk.clientKey || '',
+    clientKey: (hasKey(process.env.CHAMBINHO_CLIENT_KEY || '') ? process.env.CHAMBINHO_CLIENT_KEY : '') || (hasKey(process.env.RAIZ_CLIENT_KEY || '') ? process.env.RAIZ_CLIENT_KEY : '') || (localGateway(process.env.CHAMBINHO_GATEWAY_URL || process.env.RAIZ_GATEWAY_URL || disk.gatewayUrl || defaultUrl) ? await ensureLocalKey() : disk.clientKey || ''),
     route: process.env.CHAMBINHO_ROUTE || process.env.RAIZ_ROUTE || disk.route || 'code'
   };
 }
@@ -59,9 +73,8 @@ export async function probe(settings: CliSettings): Promise<string> {
 export async function setup(ui: Prompt, initial: CliSettings): Promise<CliSettings> {
   process.stdout.write('\nCHAMBINHO — Configuração de acesso\n');
   const address = (await ui.ask('URL do gateway [' + initial.gatewayUrl + ']: ')).trim() || initial.gatewayUrl;
-  process.stdout.write('A chave será exibida enquanto você digita; evite compartilhar a tela.\n');
-  const entered = (await ui.ask('Chave do cliente (Enter mantém a atual): ')).trim();
-  const key = entered || initial.clientKey;
+  const key = localGateway(address) ? await ensureLocalKey() : (await ui.ask('Chave do gateway remoto: ')).trim() || initial.clientKey;
+  if (localGateway(address)) process.stdout.write('Chave local de 24 caracteres gerada/recuperada automaticamente.\n');
   const route = (await ui.ask('Rota [code/fast/smart] [' + initial.route + ']: ')).trim() || initial.route;
   const next = {gatewayUrl:address,clientKey:key,route};
   if (!hasKey(key)) throw new Error('A chave precisa ter pelo menos 24 caracteres e não pode ser o placeholder.');
