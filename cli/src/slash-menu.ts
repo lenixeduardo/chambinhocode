@@ -94,6 +94,7 @@ export function openInteractivePrompt(): { ask: (question:string, options?:{secr
           draw();return;
         }
         if (key.name==='tab') {
+          if (options?.secret) return;
           const matches=matchingSlashItems(value);
           if(matches.length) {value=matches[selected].command;selected=0;draw();}
           return;
