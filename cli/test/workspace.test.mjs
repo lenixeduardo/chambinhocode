@@ -28,7 +28,8 @@ test('refuses traversal and confidential files', async t => {
   const {ws,root}=await fixture(t);
   await assert.rejects(()=>ws.readFile('../other-file'),/fora do projeto/);
   await assert.rejects(()=>ws.readFile('.env'),/bloqueado/);
-  await fs.symlink(path.join(root,'src','hello.ts'),path.join(root,'alias.ts'));
+  try { await fs.symlink(path.join(root,'src','hello.ts'),path.join(root,'alias.ts'),'file'); }
+  catch (error) { if (process.platform === 'win32' && ['EPERM','EACCES'].includes(error.code)) { t.diagnostic('Windows sem permissão para symlinks; as verificações de traversal e .env passaram.'); return; } throw error; }
   await assert.rejects(()=>ws.readFile('alias.ts'),/Links simbólicos/);
   await fs.symlink(os.tmpdir(),path.join(root,'linked'));
   await assert.rejects(()=>ws.readFile('linked/test.txt'),/Links simbólicos/);
