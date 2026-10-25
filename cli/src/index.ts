@@ -50,7 +50,7 @@ Dentro da conversa:
   /menu     voltar ao menu inicial sem perder a conversa\n  /inicio   alias de /menu; 0 também abre o menu\n  /         mostrar atalhos slash\n  /status    status; /undo, /clear, /save, /resume, /exit
   :exit      sair
 
-Configuração (variáveis de ambiente):
+Configuração: execute chambinho setup (ou opção 5). Variáveis de ambiente opcionais:
   CHAMBINHO_GATEWAY_URL   ex.: http://127.0.0.1:8000
   CHAMBINHO_CLIENT_KEY    token secreto configurado em API_CLIENTS_JSON
   CHAMBINHO_ROUTE         rota padrão: code
