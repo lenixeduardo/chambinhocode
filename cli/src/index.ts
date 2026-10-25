@@ -126,7 +126,9 @@ async function main() {
     for (;;) {
       const input = (await ui!.ask('\n❯ ')).trim();
       if (!input) continue;
-      if (input === '/menu' || input === '/inicio' || input === ':menu' || input === '0') { process.stdout.write(banner(agent.route, workspace.root)); continue; }\n      if (input === '/') { process.stdout.write('Comandos: /menu, /help, /plan, /audit, /goal, /review, /fix, /test, /skills, /skill, /visual, /agents, /agent, /parallel, /model, /status, /undo, /clear, /save, /resume, /exit\\n'); continue; }\n      if (input === '6') return;
+      if (input === '/menu' || input === '/inicio' || input === ':menu' || input === '0') { process.stdout.write(banner(agent.route, workspace.root)); continue; }
+      if (input === '/') { process.stdout.write('Comandos: /menu, /help, /plan, /audit, /goal, /review, /fix, /test, /skills, /skill, /visual, /agents, /agent, /parallel, /model, /status, /undo, /clear, /save, /resume, /exit\\n'); continue; }
+      if (input === '6') return;
       if (input === '5' || input === '/setup' || input === ':setup') {
         try { settings = await setup(ui!, settings); server = settings.gatewayUrl; (agent as unknown as {client: GatewayClient}).client = new GatewayClient(server,settings.clientKey); }
         catch (error) { process.stderr.write((error as Error).message + '\n'); }
